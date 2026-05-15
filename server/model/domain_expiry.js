@@ -4,6 +4,7 @@ const { log, TYPES_WITH_DOMAIN_EXPIRY_SUPPORT_VIA_FIELD } = require("../../src/u
 const { parse: parseTld } = require("tldts");
 const { setting, setSetting } = require("../util-server");
 const { Notification } = require("../notification");
+const { NOTIFICATION_EVENTS, notificationWantsEvent } = require("../notification-events");
 const TranslatableError = require("../translatable-error");
 const dayjs = require("dayjs");
 const { Settings } = require("../settings");
@@ -153,11 +154,12 @@ async function sendDomainNotificationByTargetDays(domain, daysRemaining, targetD
 
     for (let notification of notificationList) {
         try {
+            const parsed = JSON.parse(notification.config);
+            if (!notificationWantsEvent(parsed, NOTIFICATION_EVENTS.DOMAIN_EXPIRY)) {
+                continue;
+            }
             log.debug("domain_expiry", `Sending to ${notification.name}`);
-            await Notification.send(
-                JSON.parse(notification.config),
-                `Domain name ${domain} will expire in ${daysRemaining} days`
-            );
+            await Notification.send(parsed, `Domain name ${domain} will expire in ${daysRemaining} days`);
             sent = true;
         } catch (e) {
             log.error("domain_expiry", `Cannot send domain notification to ${notification.name}:`, e);

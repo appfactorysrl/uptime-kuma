@@ -114,6 +114,58 @@
                         <div class="mb-3 mt-4">
                             <hr class="dropdown-divider mb-4" />
 
+                            <label class="form-label">{{ $t("notificationEventTypes") }}</label>
+                            <div class="form-text mb-2">{{ $t("notificationEventTypesDescription") }}</div>
+
+                            <div class="form-check mb-2">
+                                <input
+                                    id="notification-event-status-down"
+                                    class="form-check-input"
+                                    type="checkbox"
+                                    :checked="isEventChecked('statusDown')"
+                                    @change="setEventFromCheckbox('statusDown', $event.target.checked)"
+                                />
+                                <label class="form-check-label" for="notification-event-status-down">{{
+                                    $t("notificationEventStatusDown")
+                                }}</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input
+                                    id="notification-event-status-up"
+                                    class="form-check-input"
+                                    type="checkbox"
+                                    :checked="isEventChecked('statusUp')"
+                                    @change="setEventFromCheckbox('statusUp', $event.target.checked)"
+                                />
+                                <label class="form-check-label" for="notification-event-status-up">{{
+                                    $t("notificationEventStatusUp")
+                                }}</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input
+                                    id="notification-event-tls"
+                                    class="form-check-input"
+                                    type="checkbox"
+                                    :checked="isEventChecked('tlsCertExpiry')"
+                                    @change="setEventFromCheckbox('tlsCertExpiry', $event.target.checked)"
+                                />
+                                <label class="form-check-label" for="notification-event-tls">{{
+                                    $t("notificationEventTlsCertExpiry")
+                                }}</label>
+                            </div>
+                            <div class="form-check mb-3">
+                                <input
+                                    id="notification-event-domain"
+                                    class="form-check-input"
+                                    type="checkbox"
+                                    :checked="isEventChecked('domainExpiry')"
+                                    @change="setEventFromCheckbox('domainExpiry', $event.target.checked)"
+                                />
+                                <label class="form-check-label" for="notification-event-domain">{{
+                                    $t("notificationEventDomainExpiry")
+                                }}</label>
+                            </div>
+
                             <div class="form-check form-switch">
                                 <input v-model="notification.isDefault" class="form-check-input" type="checkbox" />
                                 <label class="form-check-label">{{ $t("Default enabled") }}</label>
@@ -170,6 +222,8 @@ import { Modal } from "bootstrap";
 
 import Confirm from "./Confirm.vue";
 import NotificationFormList from "./notifications";
+
+const NOTIFICATION_EVENT_KEYS = ["statusUp", "statusDown", "tlsCertExpiry", "domainExpiry"];
 
 export default {
     components: {
@@ -445,6 +499,7 @@ export default {
          */
         submit() {
             this.processing = true;
+            this.normalizeNotificationEventSubscriptions();
             this.$root.getSocket().emit("addNotification", this.notification, this.id, (res) => {
                 this.$root.toastRes(res);
                 this.processing = false;
@@ -466,6 +521,7 @@ export default {
          */
         test() {
             this.processing = true;
+            this.normalizeNotificationEventSubscriptions();
             this.$root.getSocket().emit("testNotification", this.notification, (res) => {
                 this.$root.toastRes(res);
                 this.processing = false;
@@ -487,6 +543,44 @@ export default {
                 }
             });
         },
+        /**
+         * @param {string} key eventSubscriptions field
+         * @returns {boolean} checked when enabled (legacy: missing object means all enabled)
+         */
+        isEventChecked(key) {
+            return this.notification.eventSubscriptions?.[key] !== false;
+        },
+
+        /**
+         * Toggle one subscription flag (initializes object on first edit).
+         * @param {string} key eventSubscriptions field
+         * @param {boolean} enabled whether to receive this alert type
+         * @returns {void}
+         */
+        setEventFromCheckbox(key, enabled) {
+            if (!this.notification.eventSubscriptions) {
+                this.notification.eventSubscriptions = Object.fromEntries(
+                    NOTIFICATION_EVENT_KEYS.map((k) => [k, true])
+                );
+            }
+            this.notification.eventSubscriptions[key] = enabled;
+        },
+
+        /**
+         * Drop eventSubscriptions when all types are enabled to keep configs small.
+         * @returns {void}
+         */
+        normalizeNotificationEventSubscriptions() {
+            const sub = this.notification.eventSubscriptions;
+            if (!sub) {
+                return;
+            }
+            const anyDisabled = NOTIFICATION_EVENT_KEYS.some((k) => sub[k] === false);
+            if (!anyDisabled) {
+                delete this.notification.eventSubscriptions;
+            }
+        },
+
         /**
          * Get a unique default name for the notification
          * @param {keyof NotificationFormList} notificationKey

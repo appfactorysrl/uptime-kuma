@@ -46,6 +46,7 @@ const {
 const { R } = require("redbean-node");
 const { BeanModel } = require("redbean-node/dist/bean-model");
 const { Notification } = require("../notification");
+const { NOTIFICATION_EVENTS, notificationWantsEvent } = require("../notification-events");
 const { Proxy } = require("../proxy");
 const { demoMode } = require("../config");
 const version = require("../../package.json").version;
@@ -1537,14 +1538,16 @@ class Monitor extends BeanModel {
                 }
             }
 
+            const statusEvent =
+                bean.status === UP ? NOTIFICATION_EVENTS.STATUS_UP : NOTIFICATION_EVENTS.STATUS_DOWN;
+
             for (let notification of notificationList) {
                 try {
-                    await Notification.send(
-                        JSON.parse(notification.config),
-                        msg,
-                        monitor.toJSON(preloadData, false),
-                        heartbeatJSON
-                    );
+                    const parsed = JSON.parse(notification.config);
+                    if (!notificationWantsEvent(parsed, statusEvent)) {
+                        continue;
+                    }
+                    await Notification.send(parsed, msg, monitor.toJSON(preloadData, false), heartbeatJSON);
                 } catch (e) {
                     log.error("monitor", "Cannot send notification to " + notification.name);
                     log.error("monitor", e);
@@ -1593,9 +1596,13 @@ class Monitor extends BeanModel {
 
         for (let notification of notificationList) {
             try {
+                const parsed = JSON.parse(notification.config);
+                if (!notificationWantsEvent(parsed, NOTIFICATION_EVENTS.TLS_CERT_EXPIRY)) {
+                    continue;
+                }
                 log.debug("monitor", "Sending to " + notification.name);
                 await Notification.send(
-                    JSON.parse(notification.config),
+                    parsed,
                     `[${this.name}][${this.url}] ${certType} certificate ${certCN} will expire in ${daysRemaining} days`
                 );
                 sent = true;
